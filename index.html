@@ -2,22 +2,27 @@
 <html lang="es">
 
 <head>
-  <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistema de Contabilidad</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
     rel="stylesheet">
-  <?!= include('style'); ?>
-
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
+  <!-- LOADING -->
+  <div class="loader-overlay" id="loader">
+    <div class="loader-spinner"></div>
+    <span>Cargando sistema...</span>
+  </div>
+
   <!-- SIDEBAR -->
   <aside class="sb" id="sb">
     <div class="sb-brand">
-      <h2>Contabilidad</h2>
+      <h2><i class="fas fa-calculator" style="margin-right:6px;font-size:14px"></i>Contabilidad</h2>
       <span>Sistema de Gestion</span>
     </div>
     <nav id="nav">
@@ -31,7 +36,7 @@
       <a data-s="ratios"><i class="fas fa-chart-line"></i>Indicadores Financieros</a>
       <a data-s="config"><i class="fas fa-gear"></i>Configuracion</a>
     </nav>
-    <div class="sb-foot">v1.1 — Moneda: CUP</div>
+    <div class="sb-foot">v1.1 &mdash; Moneda: CUP</div>
   </aside>
 
   <!-- MAIN -->
@@ -66,10 +71,12 @@
         <div class="kpi-g" id="kpiG"></div>
         <div class="ch-g">
           <div class="ch-card">
-            <h3>Ventas vs Costos vs Gastos</h3><canvas id="cvBar" height="200"></canvas>
+            <h3>Ventas vs Costos vs Gastos</h3>
+            <canvas id="cvBar" height="200"></canvas>
           </div>
           <div class="ch-card">
-            <h3>Desglose de Gastos</h3><canvas id="cvDon" height="200"></canvas>
+            <h3>Desglose de Gastos</h3>
+            <canvas id="cvDon" height="200"></canvas>
           </div>
         </div>
         <div class="mb-t">
@@ -282,10 +289,7 @@
   <!-- TOAST -->
   <div class="toast-c" id="toC"></div>
 
-  <!-- PRINT -->
-  <div class="pc" id="prC"></div>
-
-  <!--<?!= include('script'); ?> -->
-
+  <script src="script.js"></script>
 </body>
+
 </html>
