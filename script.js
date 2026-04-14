@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════
-// SISTEMA DE CONTABILIDAD — FRONTEND v1.1
+// SISTEMA DE CONTABILIDAD — FRONTEND
 // ══════════════════════════════════════════════════
 var MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 var curSec = 'dashboard';
@@ -31,47 +31,15 @@ function fp(n) { return (Number(n || 0)).toFixed(2) + '%'; }
 function fr(n) { return (Number(n || 0)).toFixed(2); }
 function mn(m) { return MESES[Number(m)] || ''; }
 
-// Formatear fecha para mostrar en tablas
-function fd(v) {
-  if (!v) return '';
-  if (v instanceof Date) {
-    return ('0' + v.getDate()).slice(-2) + '/' + ('0' + (v.getMonth() + 1)).slice(-2) + '/' + v.getFullYear();
-  }
-  var s = String(v);
-  if (s.indexOf('T') !== -1) {
-    var parts = s.split('T')[0].split('-');
-    if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
-  }
-  if (s.indexOf('/') !== -1) return s;
-  return s;
-}
-
-// Formatear fecha para input[type=date]
-function fdI(v) {
-  if (!v) return '';
-  if (v instanceof Date) {
-    return v.getFullYear() + '-' + ('0' + (v.getMonth() + 1)).slice(-2) + '-' + ('0' + v.getDate()).slice(-2);
-  }
-  var s = String(v);
-  if (s.indexOf('T') !== -1) return s.split('T')[0];
-  if (s.indexOf('/') !== -1) {
-    var p = s.split('/');
-    if (p.length === 3) return p[2] + '-' + p[1] + '-' + p[0];
-  }
-  return s;
-}
-
 // Llamada al servidor
 function sv(fn) {
   var args = Array.prototype.slice.call(arguments, 1);
   return new Promise(function (ok, no) {
     google.script.run
-      .withSuccessHandler(function (result) {
-        ok(result);
-      })
+      .withSuccessHandler(ok)
       .withFailureHandler(function (e) {
-        console.error('Error en ' + fn + ':', e);
-        toast('Error de conexion: ' + fn, 'e');
+        console.error(fn, e);
+        toast('Error de conexion', 'e');
         no(e);
       })[fn].apply(null, args);
   });
@@ -84,7 +52,7 @@ function toast(msg, t) {
   d.className = 'toast ' + t;
   d.textContent = msg;
   $('toC').appendChild(d);
-  setTimeout(function () { if (d.parentNode) d.remove(); }, 3100);
+  setTimeout(function () { d.remove(); }, 3100);
 }
 
 // ── Navegacion ──
@@ -336,14 +304,7 @@ function drawDon(e) {
 // ══════════════════════════════════════
 function loadTbl(sh, tb, fn) {
   sv('getSheetData', sh).then(function (data) {
-    var rows;
-    if (curMes) {
-      rows = data.r.filter(function (r) {
-        return String(r['Mes'] || '').trim() === String(curMes).trim();
-      });
-    } else {
-      rows = data.r;
-    }
+    var rows = curMes ? data.r.filter(function (r) { return String(r['Mes']) === String(curMes); }) : data.r;
     var el = $(tb);
     if (!rows.length) {
       el.innerHTML = '<tr><td colspan="20" class="empty"><i class="fas fa-inbox"></i>Sin registros para este periodo</td></tr>';
@@ -362,33 +323,28 @@ function ab(sh, r) {
 
 function rV(r) {
   var t = Number(r['Transferencia'] || 0) + Number(r['Efectivo'] || 0) + Number(r['Otros Activos'] || 0);
-  return '<tr><td>' + fd(r['Fecha']) + '</td><td>' + (r['Descripcion'] || '') + '</td><td>' + (r['Tipo'] || '') + '</td>' +
+  return '<tr><td>' + r['Fecha'] + '</td><td>' + r['Descripcion'] + '</td><td>' + r['Tipo'] + '</td>' +
     '<td class="n">' + f(r['Transferencia']) + '</td><td class="n">' + f(r['Efectivo']) + '</td>' +
     '<td class="n">' + f(r['Otros Activos']) + '</td><td class="n" style="font-weight:700">' + f(t) + '</td>' +
     '<td>' + mn(r['Mes']) + '</td>' + ab('Ventas', r) + '</tr>';
 }
 
 function rG(r) {
-  return '<tr><td>' + fd(r['Fecha']) + '</td><td>' + (r['Descripcion'] || '') + '</td><td>' + (r['Subcategoria'] || '') + '</td>' +
-    '<td class="n">' + f(r['Monto']) + '</td><td>' + (r['Tipo'] || '') + '</td><td>' + (r['Categoria'] || '') + '</td>' +
+  return '<tr><td>' + r['Fecha'] + '</td><td>' + r['Descripcion'] + '</td><td>' + r['Subcategoria'] + '</td>' +
+    '<td class="n">' + f(r['Monto']) + '</td><td>' + r['Tipo'] + '</td><td>' + r['Categoria'] + '</td>' +
     '<td>' + (r['Factura'] || '-') + '</td>' + ab('Gastos', r) + '</tr>';
 }
 
 function rC(r) {
-  return '<tr><td>' + fd(r['Fecha']) + '</td><td>' + (r['Descripcion'] || '') + '</td>' +
-    '<td class="n">' + f(r['Monto']) + '</td><td>' + (r['Clasificacion'] || '') + '</td><td>' + (r['Tipo'] || '') + '</td>' +
+  return '<tr><td>' + r['Fecha'] + '</td><td>' + r['Descripcion'] + '</td>' +
+    '<td class="n">' + f(r['Monto']) + '</td><td>' + r['Clasificacion'] + '</td><td>' + r['Tipo'] + '</td>' +
     '<td>' + (r['Factura'] || '-') + '</td>' + ab('Costos', r) + '</tr>';
 }
 
 function rCo(r) {
-  var stock = String(r['Stock'] || '').trim();
-  var stockHtml = stock === 'Sí'
-    ? '<span style="color:var(--accent);font-weight:700"><i class="fas fa-check-circle"></i> Sí</span>'
-    : '<span style="color:var(--muted)">No</span>';
-  return '<tr><td>' + fd(r['Fecha']) + '</td><td>' + (r['Producto'] || '') + '</td><td>' + (r['Cantidad'] || '') + '</td>' +
-    '<td>' + (r['U/M'] || '') + '</td><td class="n">' + f(r['Precio']) + '</td>' +
-    '<td class="n" style="font-weight:700">' + f(r['Monto']) + '</td>' +
-    '<td>' + stockHtml + '</td>' + ab('Compras', r) + '</tr>';
+  return '<tr><td>' + r['Fecha'] + '</td><td>' + r['Producto'] + '</td><td>' + r['Cantidad'] + '</td>' +
+    '<td>' + r['U/M'] + '</td><td class="n">' + f(r['Precio']) + '</td>' +
+    '<td class="n" style="font-weight:700">' + f(r['Monto']) + '</td>' + ab('Compras', r) + '</tr>';
 }
 
 // ══════════════════════════════════════
@@ -397,14 +353,14 @@ function rCo(r) {
 function loadInv() {
   Promise.all([sv('getSheetData', 'Inventario_Inicial'), sv('getSheetData', 'Inventario_Final')]).then(function (results) {
     var ii = results[0], iff = results[1];
-    var flt = function (r) { return !curMes || String(r['Mes'] || '').trim() === String(curMes).trim(); };
-    var ir = function (r, shName) {
-      return '<tr><td>' + (r['Producto'] || '') + '</td><td>' + (r['U/M'] || '') + '</td><td>' + (r['Cantidad'] || '') + '</td>' +
+    var flt = function (r) { return !curMes || String(r['Mes']) === String(curMes); };
+    var ir = function (r) {
+      return '<tr><td>' + r['Producto'] + '</td><td>' + r['U/M'] + '</td><td>' + r['Cantidad'] + '</td>' +
         '<td class="n">' + f(r['Precio']) + '</td><td class="n" style="font-weight:700">' + f(r['Valor Total']) + '</td>' +
-        ab(shName, r) + '</tr>';
+        ab(r._sh || 'Inventario_Inicial', r) + '</tr>';
     };
-    var f1 = ii.r.filter(flt).map(function (r) { return ir(r, 'Inventario_Inicial'); });
-    var f2 = iff.r.filter(flt).map(function (r) { return ir(r, 'Inventario_Final'); });
+    var f1 = ii.r.filter(flt).map(function (r) { r._sh = 'Inventario_Inicial'; return ir(r); });
+    var f2 = iff.r.filter(flt).map(function (r) { r._sh = 'Inventario_Final'; return ir(r); });
     $('tbII').innerHTML = f1.length ? f1.join('') : '<tr><td colspan="6" class="empty"><i class="fas fa-inbox"></i>Sin datos</td></tr>';
     $('tbIF').innerHTML = f2.length ? f2.join('') : '<tr><td colspan="6" class="empty"><i class="fas fa-inbox"></i>Sin datos</td></tr>';
   });
@@ -514,8 +470,8 @@ function loadRat() {
 function loadCfg() {
   sv('readConfig').then(function (d) {
     $('cfgG').innerHTML = d.r.map(function (r) {
-      return '<div class="cfg-i"><label>' + (r['Parametro'] || '') + '</label>' +
-        '<input type="number" step="0.01" data-k="' + (r['Parametro'] || '') + '" value="' + (r['Valor'] || 0) + '"></div>';
+      return '<div class="cfg-i"><label>' + r['Parametro'] + '</label>' +
+        '<input type="number" step="0.01" data-k="' + r['Parametro'] + '" value="' + (r['Valor'] || 0) + '"></div>';
     }).join('');
   });
 }
@@ -560,12 +516,12 @@ function moSel() {
 
 function selOpt(opts, sel) {
   return opts.map(function (o) {
-    return '<option' + (String(sel || '').trim() === String(o).trim() ? ' selected' : '') + '>' + o + '</option>';
+    return '<option' + (sel === o ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
 }
 
 function fg(l, n, t, v, x) {
-  return '<div class="fg"><label>' + l + '</label><input type="' + (t || 'text') + '" name="' + n + '" value="' + (v !== undefined && v !== null ? String(v) : '') + '" ' + (x || '') + '></div>';
+  return '<div class="fg"><label>' + l + '</label><input type="' + (t || 'text') + '" name="' + n + '" value="' + (v !== undefined ? v : '') + '" ' + (x || '') + '></div>';
 }
 
 function fs(l, n, opts) {
@@ -576,46 +532,44 @@ function formHTML(sec, d) {
   d = d || {};
   var ms = moSel();
   // Marcar el mes seleccionado
-  var mesVal = String(d['Mes'] || '').trim();
-  if (mesVal) ms = ms.replace('value="' + mesVal + '"', 'value="' + mesVal + '" selected');
+  if (d.Mes) ms = ms.replace('value="' + d.Mes + '"', 'value="' + d.Mes + '" selected');
 
   switch (sec) {
     case 'ventas':
-      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', fdI(d['Fecha'])) + '</div>' +
-        fg('Descripcion', 'Descripcion', 'text', d['Descripcion']) +
-        fs('Tipo', 'Tipo', selOpt(['Venta Neta', 'IPV', 'Otra Venta'], d['Tipo'])) +
-        '<div class="fr">' + fg('Transferencia', 'Transferencia', 'number', d['Transferencia'] || '0', 'step="0.01"') +
-        fg('Efectivo', 'Efectivo', 'number', d['Efectivo'] || '0', 'step="0.01"') + '</div>' +
+      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', d.Fecha) + '</div>' +
+        fg('Descripcion', 'Descripcion', 'text', d.Descripcion) +
+        fs('Tipo', 'Tipo', selOpt(['Venta Neta', 'IPV', 'Otra Venta'], d.Tipo)) +
+        '<div class="fr">' + fg('Transferencia', 'Transferencia', 'number', d.Transferencia || '0', 'step="0.01"') +
+        fg('Efectivo', 'Efectivo', 'number', d.Efectivo || '0', 'step="0.01"') + '</div>' +
         fg('Otros Activos', 'Otros Activos', 'number', d['Otros Activos'] || '0', 'step="0.01"') +
         fs('Mes', 'Mes', ms);
 
     case 'gastos':
-      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', fdI(d['Fecha'])) + '</div>' +
-        fg('Descripcion', 'Descripcion', 'text', d['Descripcion']) +
-        fs('Categoria', 'Categoria', selOpt(['Operativo', 'Financiero', 'Administrativo', 'Impuestos'], d['Categoria'])) +
-        fs('Subcategoria', 'Subcategoria', selOpt(SUBCATS, d['Subcategoria'])) +
-        fg('Monto', 'Monto', 'number', d['Monto'] || '0', 'step="0.01"') +
-        fs('Clasificacion', 'Clasificacion', selOpt(['Varia', 'No Varia'], d['Clasificacion'])) +
-        fs('Tipo', 'Tipo', selOpt(['Fijo', 'Variable'], d['Tipo'])) +
-        fg('Factura', 'Factura', 'text', d['Factura']) +
+      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', d.Fecha) + '</div>' +
+        fg('Descripcion', 'Descripcion', 'text', d.Descripcion) +
+        fs('Categoria', 'Categoria', selOpt(['Operativo', 'Financiero', 'Administrativo', 'Impuestos'], d.Categoria)) +
+        fs('Subcategoria', 'Subcategoria', selOpt(SUBCATS, d.Subcategoria)) +
+        fg('Monto', 'Monto', 'number', d.Monto || '0', 'step="0.01"') +
+        fs('Clasificacion', 'Clasificacion', selOpt(['Varia', 'No Varia'], d.Clasificacion)) +
+        fs('Tipo', 'Tipo', selOpt(['Fijo', 'Variable'], d.Tipo)) +
+        fg('Factura', 'Factura', 'text', d.Factura) +
         fs('Mes', 'Mes', ms);
 
     case 'costos':
-      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', fdI(d['Fecha'])) + '</div>' +
-        fs('Descripcion', 'Descripcion', selOpt(COSTOS_DESC, d['Descripcion'])) +
-        fg('Monto', 'Monto', 'number', d['Monto'] || '0', 'step="0.01"') +
-        fs('Clasificacion', 'Clasificacion', selOpt(['Varia', 'No Varia'], d['Clasificacion'])) +
-        fs('Tipo', 'Tipo', selOpt(['Fijo', 'Variable'], d['Tipo'])) +
-        fg('Factura', 'Factura', 'text', d['Factura']) +
+      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', d.Fecha) + '</div>' +
+        fs('Descripcion', 'Descripcion', selOpt(COSTOS_DESC, d.Descripcion)) +
+        fg('Monto', 'Monto', 'number', d.Monto || '0', 'step="0.01"') +
+        fs('Clasificacion', 'Clasificacion', selOpt(['Varia', 'No Varia'], d.Clasificacion)) +
+        fs('Tipo', 'Tipo', selOpt(['Fijo', 'Variable'], d.Tipo)) +
+        fg('Factura', 'Factura', 'text', d.Factura) +
         fs('Mes', 'Mes', ms);
 
     case 'compras':
-      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', fdI(d['Fecha'])) + '</div>' +
-        fg('Producto', 'Producto', 'text', d['Producto']) +
-        '<div class="fr">' + fg('Cantidad', 'Cantidad', 'number', d['Cantidad'] || '0', 'step="0.01"') +
+      return '<div class="fr">' + fg('Fecha', 'Fecha', 'date', d.Fecha) + '</div>' +
+        fg('Producto', 'Producto', 'text', d.Producto) +
+        '<div class="fr">' + fg('Cantidad', 'Cantidad', 'number', d.Cantidad || '0', 'step="0.01"') +
         fg('U/M', 'U/M', 'text', d['U/M'] || 'unidad') + '</div>' +
-        fg('Precio Unitario', 'Precio', 'number', d['Precio'] || '0', 'step="0.01"') +
-        fs('Agregar al Stock', 'Stock', selOpt(['No', 'Sí'], d['Stock'] || 'No')) +
+        fg('Precio Unitario', 'Precio', 'number', d.Precio || '0', 'step="0.01"') +
         fs('Mes', 'Mes', ms);
   }
   return '';
@@ -649,14 +603,12 @@ function openEdit(sh, row) {
 
     if (sh === 'Inventario_Inicial' || sh === 'Inventario_Final') {
       var t = sh === 'Inventario_Inicial' ? 'Inventario Inicial' : 'Inventario Final';
-      var ms = moSel();
-      var mesVal = String(r['Mes'] || '').trim();
-      if (mesVal) ms = ms.replace('value="' + mesVal + '"', 'value="' + mesVal + '" selected');
+      var ms = moSel().replace('value="' + (r.Mes || '') + '"', 'value="' + (r.Mes || '') + '" selected');
       opMo('Editar ' + t,
-        fg('Producto', 'Producto', 'text', r['Producto']) +
+        fg('Producto', 'Producto', 'text', r.Producto) +
         fg('U/M', 'U/M', 'text', r['U/M']) +
-        '<div class="fr">' + fg('Cantidad', 'Cantidad', 'number', r['Cantidad'], 'step="0.01"') +
-        fg('Precio', 'Precio', 'number', r['Precio'], 'step="0.01"') + '</div>' +
+        '<div class="fr">' + fg('Cantidad', 'Cantidad', 'number', r.Cantidad, 'step="0.01"') +
+        fg('Precio', 'Precio', 'number', r.Precio, 'step="0.01"') + '</div>' +
         fs('Mes', 'Mes', ms),
         function () { saveInv(sh); }
       );
@@ -676,29 +628,16 @@ function saveFromForm(sec) {
   var d = getFormData();
   var sh = SH_MAP[sec];
   if (!d.Fecha) { toast('La fecha es obligatoria', 'e'); return; }
-  if (!d.Mes) { toast('El mes es obligatorio', 'e'); return; }
-
-  if (sec === 'compras') {
-    d['Monto'] = (Number(d.Cantidad || 0) * Number(d.Precio || 0)).toFixed(2);
-  }
+  if (sec === 'compras') d['Monto'] = (Number(d.Cantidad || 0) * Number(d.Precio || 0)).toFixed(2);
 
   if (editCtx && SH_MAP[sec]) {
     sv('editRow', editCtx.sh, editCtx.row, d).then(function () {
       toast('Registro actualizado', 's'); clMo(); load(curSec);
     });
   } else {
-    if (sec === 'compras') {
-      sv('addCompraConStock', d).then(function () {
-        var msg = 'Registro agregado';
-        if (String(d.Stock || '').trim() === 'Sí') msg += ' — incluido en Inventario Final';
-        toast(msg, 's');
-        clMo(); load(curSec);
-      });
-    } else {
-      sv('addRow', sh, d).then(function () {
-        toast('Registro agregado', 's'); clMo(); load(curSec);
-      });
-    }
+    sv('addRow', sh, d).then(function () {
+      toast('Registro agregado', 's'); clMo(); load(curSec);
+    });
   }
 }
 
@@ -719,7 +658,6 @@ function addInv(sh) {
 // ── Inventario: Guardar ──
 function saveInv(sh) {
   var d = getFormData();
-  if (!d.Producto) { toast('El producto es obligatorio', 'e'); return; }
   d['Valor Total'] = (Number(d.Cantidad || 0) * Number(d.Precio || 0)).toFixed(2);
 
   if (editCtx) {
