@@ -337,6 +337,9 @@ function loadDash() {
   if (cache.dashboard) {
     try { renderDashboard(cache.dashboard); } catch (e) { }
     // refrescar en background
+    svWithLoader('loadDashboard', curMes || null).then(function (d) {
+      if (d) { cache.dashboard = d; try { renderDashboard(d); } catch (e) { } }
+    }).catch(function () { });
     return;
   }
 
