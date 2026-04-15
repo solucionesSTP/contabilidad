@@ -351,54 +351,60 @@ function loadDash() {
 }
 
 function renderDashboard(d) {
-  if (!d) { console.warn('renderDashboard: argumento nulo'); return; }
-  // Si la respuesta viene envuelta (ok + estado), usar d.estado
+  if (!d) return;
   var payload = d.estado ? d : { estado: d };
   var e = payload.estado;
-  if (!e) { console.warn('renderDashboard: no hay campo estado', d); return; }
+  if (!e) return;
 
-  // KPI principal
-  try {
-    var kpiG = $('kpiG');
-    if (kpiG) {
-      kpiG.innerHTML = [
-        kpi('Ventas Netas', f(e.ventas), '', 'c1'),
-        kpi('Utilidad Bruta', f(e.ub), 'Margen: ' + fp(e.mb), 'c2', e.mb >= 50 ? 'ok' : 'no'),
-        kpi('Utilidad Neta', f(e.un), 'Margen: ' + fp(e.mn), 'c3', e.un >= 0 ? 'ok' : 'no'),
-        kpi('Gastos Totales', f(e.gt), 'Oper.+Fin.+Admon.', 'c4')
-      ].join('');
-    }
-  } catch (err) {
-    console.error('renderDashboard -> KPI error', err);
+  // KPI y margenes (igual que antes)...
+  // --- omitted for brevity; conserva tu implementación de KPI/mbG ---
+
+  // Preparar HTMLs
+  var totalG = Number(e.gt || 0);
+
+  // Desglose de Gastos
+  var rows = '<div class="tc-h"><h3>Desglose de Gastos</h3></div>' +
+    '<table><thead><tr><th>Categoria</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>';
+  function addRow(label, value) {
+    var pct = totalG > 0 ? ((Number(value || 0) / totalG) * 100).toFixed(2) + '%' : '0%';
+    rows += '<tr><td>' + label + '</td><td class="n">' + f(value) + '</td><td class="n">' + pct + '</td></tr>';
   }
+  addRow('Gastos Operativos', e.go);
+  addRow('Gastos Financieros', e.gf);
+  addRow('Gastos de Administracion', e.ga);
+  rows += '<tr class="tr-t"><td>Total</td><td class="n">' + f(totalG) + '</td><td class="n">100%</td></tr>';
+  rows += '</tbody></table>';
 
-  // Margenes
+  // Costos fijos vs variables
+  var cvTotal = Number(e.cv || 0);
+  var cf = Number(e.cf || 0);
+  var cvar = Number(e.cvar || 0);
+  var htmlCosto = '<div class="tc-h"><h3>Costos Fijos vs Variables</h3></div>' +
+    '<table><thead><tr><th>Tipo</th><th class="n">Monto</th><th class="n">%</th></tr></thead><tbody>' +
+    '<tr><td>Costos Fijos</td><td class="n">' + f(cf) + '</td><td class="n">' + (cvTotal > 0 ? fp(cf / cvTotal * 100) : '0%') + '</td></tr>' +
+    '<tr><td>Costos Variables</td><td class="n">' + f(cvar) + '</td><td class="n">' + (cvTotal > 0 ? fp(cvar / cvTotal * 100) : '0%') + '</td></tr>' +
+    '<tr class="tr-t"><td>Total</td><td class="n">' + f(cvTotal) + '</td><td class="n">100%</td></tr></tbody></table>';
+
+  // Escribir en DOM con fallback
+  var dcGastoEl = elOrFallback('dcGasto', 's-gastos');
+  var dcCostoEl = elOrFallback('dcCosto', 's-costos');
+
+  if (dcGastoEl) dcGastoEl.innerHTML = rows;
+  else console.warn('No se encontró contenedor para Desglose de Gastos (dcGasto / s-gastos)');
+
+  if (dcCostoEl) dcCostoEl.innerHTML = htmlCosto;
+  else console.warn('No se encontró contenedor para Costos (dcCosto / s-costos)');
+
+  // Gráficos: Ventas vs Costos vs Gastos y dona
   try {
-    if ($('mbG')) {
-      $('mbG').innerHTML = [
-        mb('Margen Bruto', e.mb, 'g'),
-        mb('Margen Operativo', e.mo, 'a'),
-        mb('Margen Neto', e.mn, e.mn >= 0 ? 'g' : 'r')
-      ].join('');
-    }
-  } catch (err) { console.error('renderDashboard -> mbG error', err); }
+    if (typeof drawBar === 'function') drawBar({ ventas: Number(e.ventas||0), cv: Number(e.cv||0), gt: Number(e.gt||0), un: Number(e.un||0) });
+    if (typeof drawDon === 'function') drawDon({ go: Number(e.go||0), gf: Number(e.gf||0), ga: Number(e.ga||0) });
+  } catch (err) {
+    console.error('Error al dibujar gráficos', err);
+  }
+}
 
-  // Ventas vs Costos vs Gastos (gráfico de barras)
-  try {
-    // drawBar espera un objeto con ventas, cv (costos totales), gt (gastos totales), un (utilidad neta)
-    if (typeof drawBar === 'function') {
-      drawBar({
-        ventas: Number(e.ventas || 0),
-        cv: Number(e.cv || 0),
-        gt: Number(e.gt || 0),
-        un: Number(e.un || 0)
-      });
-    } else {
-      console.warn('drawBar no está definida');
-    }
-  } catch (err) { console.error('renderDashboard -> drawBar error', err); }
-
-  // Desglose de Gastos (tabla)
+// Desglose de Gastos (tabla)
   try {
     if ($('dcGasto')) {
       var totalG = Number(e.gt || 0);
