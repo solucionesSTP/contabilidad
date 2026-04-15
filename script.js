@@ -41,41 +41,6 @@ var SH_MAP = {
   compras: 'Compras'
 };
 
-// ----------------------
-// Cache global y prefetch
-// ----------------------
-var cache = {
-  dashboard: null,
-  Ventas: null,
-  Gastos: null,
-  Costos: null,
-  Compras: null
-};
-
-function initApp() {
-  // Llamadas en paralelo para tener datos listos
-  Promise.all([
-    sv('loadDashboard', curMes || null).catch(function () { return null; }),
-    sv('getSheetData', 'Ventas').catch(function () { return { h: [], r: [] }; }),
-    sv('getSheetData', 'Gastos').catch(function () { return { h: [], r: [] }; })
-  ]).then(function (results) {
-    if (results[0]) { cache.dashboard = results[0]; renderDashboard(cache.dashboard); }
-    cache.Ventas = results[1];
-    cache.Gastos = results[2];
-    // Si la sección actual es una de las tablas, renderizarla inmediatamente
-    if (curSec === 'dashboard') hideLoader();
-    if (curSec === 'ventas') loadTblCached('Ventas', 'tbV', rV);
-    if (curSec === 'gastos') loadTblCached('Gastos', 'tbG', rG);
-  }).catch(function () {
-    hideLoader();
-  });
-}
-
-// Ejecutar initApp al cargar el script
-document.addEventListener('DOMContentLoaded', function () {
-  initApp();
-});
-
 // ══════════════════════════════════════
 // UTILIDADES
 // ══════════════════════════════════════
@@ -467,41 +432,21 @@ function drawDon(e) {
 // ══════════════════════════════════════
 // TABLAS CRUD
 // ══════════════════════════════════════
-function renderRowsToTable(rows, tb, fn) {
-  var el = $(tb);
-  if (!rows || !rows.length) {
-    el.innerHTML = '<tr><td colspan="20" class="empty"><i class="fas fa-inbox"></i>Sin registros para este periodo</td></tr>';
-    return;
-  }
-  el.innerHTML = rows.map(fn).join("");
-}
-
-function loadTblCached(sh, tb, fn) {
-  // Si hay cache, render inmediato
-  if (cache[sh] && cache[sh].r) {
-    renderRowsToTable(cache[sh].r.filter(function (r) {
-      return !curMes || String(r['Mes'] || "").trim() === String(curMes).trim();
-    }), tb, fn);
-    // refrescar en background
-    sv('getSheetData', sh).then(function (d) {
-      cache[sh] = d;
-      renderRowsToTable(d.r.filter(function (r) {
-        return !curMes || String(r['Mes'] || "").trim() === String(curMes).trim();
-      }), tb, fn);
-    }).catch(function () { /* silencio */ });
-    return;
-  }
-
-  // Si no hay cache, comportamiento original con loader
-  showLoader();
+function loadTbl(sh, tb, fn) {
   sv('getSheetData', sh).then(function (data) {
-    hideLoader();
-    cache[sh] = data;
     var rows = curMes
-      ? data.r.filter(function (r) { return String(r['Mes'] || "").trim() === String(curMes).trim(); })
+      ? data.r.filter(function (r) {
+        return String(r['Mes'] || '').trim() === String(curMes).trim();
+      })
       : data.r;
-    renderRowsToTable(rows, tb, fn);
-  }).catch(function () { hideLoader(); });
+    var el = $(tb);
+    if (!rows.length) {
+      el.innerHTML = '<tr><td colspan="20" class="empty">' +
+        '<i class="fas fa-inbox"></i>Sin registros para este periodo</td></tr>';
+      return;
+    }
+    el.innerHTML = rows.map(fn).join('');
+  });
 }
 
 function ab(sh, r) {
@@ -901,80 +846,40 @@ function openEdit(sh, row) {
 }
 
 // ── CRUD: Guardar ──
-function saveFromFormOptimistic(sec) {
+function saveFromForm(sec) {
   var d = getFormData();
   if (!d.Fecha) { toast('La fecha es obligatoria', 'e'); return; }
   if (!d.Mes) { toast('El mes es obligatorio', 'e'); return; }
+
   if (sec === 'compras') {
     d['Monto'] = (Number(d.Cantidad || 0) * Number(d.Precio || 0)).toFixed(2);
   }
 
-  var sh = SH_MAP[sec];
-  // Crear fila temporal para mostrar en UI
-  var tempRow = Object.assign({}, d, { _row: 'temp_' + Date.now() });
-  if (!cache[sh]) cache[sh] = { h: [], r: [] };
-  // Insertar al inicio para que sea visible inmediatamente
-  cache[sh].r = [tempRow].concat(cache[sh].r || []);
-  // Renderizar la tabla correspondiente
-  switch (sec) {
-    case 'ventas': renderRowsToTable(cache[sh].r, 'tbV', rV); break;
-    case 'gastos': renderRowsToTable(cache[sh].r, 'tbG', rG); break;
-    case 'costos': renderRowsToTable(cache[sh].r, 'tbC', rC); break;
-    case 'compras': renderRowsToTable(cache[sh].r, 'tbCo', rCo); break;
-  }
-
-  // Llamada a la API
-  var apiCall;
-  if (editCtx && editCtx.sh === sh) {
-    apiCall = sv('editRow', editCtx.sh, editCtx.row, d);
-  } else if (sec === 'compras') {
-    apiCall = sv('addCompraConStock', d);
+  if (editCtx && SH_MAP[sec]) {
+    sv('editRow', editCtx.sh, editCtx.row, d).then(function () {
+      toast('Registro actualizado', 's');
+      clMo();
+      load(curSec);
+    });
   } else {
-    apiCall = sv('addRow', sh, d);
-  }
-
-  apiCall.then(function (res) {
-    if (!res || res.ok === false) {
-      toast('Error al guardar: ' + (res && res.msg ? res.msg : ''), 'e');
-      // refrescar desde servidor para corregir cache
-      sv('getSheetData', sh).then(function (d2) {
-        cache[sh] = d2;
-        // re-renderizar
-        switch (sec) {
-          case 'ventas': renderRowsToTable(d2.r, 'tbV', rV); break;
-          case 'gastos': renderRowsToTable(d2.r, 'tbG', rG); break;
-          case 'costos': renderRowsToTable(d2.r, 'tbC', rC); break;
-          case 'compras': renderRowsToTable(d2.r, 'tbCo', rCo); break;
+    if (sec === 'compras') {
+      sv('addCompraConStock', d).then(function () {
+        var msg = 'Registro agregado';
+        if (String(d.Stock || '').trim() === 'Sí') {
+          msg += ' — incluido en Inventario Final';
         }
+        toast(msg, 's');
+        clMo();
+        load(curSec);
       });
     } else {
-      // Confirmar: refrescar para obtener _row real
-      sv('getSheetData', sh).then(function (d2) {
-        cache[sh] = d2;
-        switch (sec) {
-          case 'ventas': renderRowsToTable(d2.r, 'tbV', rV); break;
-          case 'gastos': renderRowsToTable(d2.r, 'tbG', rG); break;
-          case 'costos': renderRowsToTable(d2.r, 'tbC', rC); break;
-          case 'compras': renderRowsToTable(d2.r, 'tbCo', rCo); break;
-        }
+      sv('addRow', SH_MAP[sec], d).then(function () {
+        toast('Registro agregado', 's');
+        clMo();
+        load(curSec);
       });
-      toast(editCtx ? 'Registro actualizado' : 'Registro agregado', 's');
-      clMo();
-      editCtx = null;
     }
-  }).catch(function (err) {
-    toast('Error de red al guardar', 'e');
-    // refrescar desde servidor
-    sv('getSheetData', sh).then(function (d2) {
-      cache[sh] = d2;
-      switch (sec) {
-        case 'ventas': renderRowsToTable(d2.r, 'tbV', rV); break;
-        case 'gastos': renderRowsToTable(d2.r, 'tbG', rG); break;
-        case 'costos': renderRowsToTable(d2.r, 'tbC', rC); break;
-        case 'compras': renderRowsToTable(d2.r, 'tbCo', rCo); break;
-      }
-    });
-  });
+  }
 }
 
 // ── Inventario: Agregar ──
